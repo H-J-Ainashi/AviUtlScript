@@ -1,0 +1,92 @@
+--[[
+    破砕AX.anm
+    Copyright (C) 2021 …FGH_JKL… / Ainashi
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+]]
+
+@領域内ランダム拡散
+--track0:進行度,0,100,10,0.01
+--track1:拡散距離,0,300,30,0.01
+--track2:拡散角,-180,180,0,0.01
+--track3:拡散角,-180,180,0,0.01
+--dialog:X方向偏り（px）,v_x=0;Y方向偏り（px）,v_y=0;X軸拡散倍率,r_x=1.0;Y軸拡散倍率,r_y=1.0;シード,seed=0;分割数,separate=4;余剰部分,surplus=1;
+
+local progress  =   obj.track0
+local length    =   obj.track1
+seed            =   math.abs(math.floor(seed))
+separate        =   math.max(1, math.floor(separate))
+r_x             =   math.max(0, r_x)
+r_y             =   math.max(0, r_y)
+local left      =   -obj.w / 2
+local right     =    obj.w / 2
+local top       =   -obj.h / 2
+local bottom    =    obj.h / 2
+local src       = {
+    ox      = obj.ox,
+    oy      = obj.oy,
+    oz      = obj.oz,
+    cx      = obj.cx,
+    cy      = obj.cy,
+    cz      = obj.cz,
+    rx      = obj.rx,
+    ry      = obj.ry,
+    rz      = obj.rz
+}
+
+-- 分割線に関するパラメータ
+local line      = {}
+-- 分割線同士、または端と分割線の交点に関するパラメータ
+local dot       = {}
+-- 一時バッファへコピー
+obj.copybuffer("tmp", "obj")
+
+-- 分割線情報を初期化
+for line_i = 1,separate do
+    -- 乱数生成
+    local cx    = obj.rand(left, right, i, seed * 10 + 1)
+    local cy    = obj.rand(top, bottom, i, seed * 10 + 2)
+    local deg   = math.floor(obj.rand(1, 180, i, seed * 10 + 3))
+
+    -- 生成結果をもとに関数情報を設定
+    local add_i     = #line + 1
+    local slope     = 0
+    local intercept = 0
+    local non_disp  = 0
+    local continue  = 1
+
+    if (deg ~= 90) then
+        slope       = math.tan(math.pi * deg / 180)
+        intercept   = cy - (slope * cx)
+    end
+
+    if (add_i ~= 1) then
+        for line_j = 1, add_i - 1 do
+            if ((deg ~= 90 and line[line_j].slope == slope and line[line_j].intercept == intercept) or
+                (deg == 90 and line[line_j].cx == cx)) then
+                continue = 0;
+            end
+        end
+    end
+
+    line[add_i]             = {}
+    line[add_i].cx          = cx
+    line[add_i].cy          = cy
+    line[add_i].deg         = deg
+    line[add_i].slope       = slope
+    line[add_i].intercept   = intercept
+    line[add_i].dotpos      = {}
+end
+
+-- TODO: 交点情報を初期化する
