@@ -13,13 +13,19 @@
 			"*.cam": "lua"
 		},
 		"[lua]": {
-			"files.encoding": "shiftjis"
+			"files.encoding": "shiftjis",
+			"editor.insertSpaces": true,
+			"editor.tabSize": 4
 		},
 		"[c]": {
-			"files.encoding": "shiftjis"
+			"files.encoding": "shiftjis",
+			"editor.insertSpaces": true,
+			"editor.tabSize": 4
 		},
 		"[cpp]": {
-			"files.encoding": "shiftjis"
+			"files.encoding": "shiftjis",
+			"editor.insertSpaces": true,
+			"editor.tabSize": 4
 		},
 	}
 }
