@@ -1,0 +1,63 @@
+--[[
+    インデックス分岐A.anm
+    Copyright (C) 2021 …FGH_JKL… / Ainashi
+
+    This program is free software: you can redistribute it and/or modify
+    it under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    This program is distributed in the hope that it will be useful,
+    but WITHOUT ANY WARRANTY; without even the implied warranty of
+    MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+    GNU General Public License for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with this program.  If not, see <https://www.gnu.org/licenses/>.
+]]
+
+-- インデックス分岐A
+--track0:条件1,0,1000,0,1
+--track1:条件1,0,1000,2,1
+--track2:条件2,0,1000,0,1
+--track3:条件2,0,1000,2,1
+--check0:効果適用範囲を可視化,1
+--dialog:開始位置,stIdx={};終了位置,edIdx={};条件1無効化/chk,track_1=0;条件2無効化/chk,track_2=0;
+
+if (#stIdx ~= #edIdx) then
+    obj.load("text", 
+    [[ダイアログ内の開始位置と終了位置の
+    数値の数を揃えてください。]])
+    obj.draw()
+else
+    local continue = 1
+    if (track_1 == 0 and 
+        math.min(obj.track0, obj.track1) <= obj.index and 
+        obj.index <= math.max(obj.track0, obj.track1)) then
+        continue = 0
+
+    elseif (track_2 == 0 and 
+        math.min(obj.track2, obj.track3) <= obj.index and 
+        obj.index <= math.max(obj.track2, obj.track3)) then
+        continue = 0
+    
+    end
+    if (continue == 1) then
+        for i = 1, #stIdx do
+            if (continue == 1) then
+                if (math.min(stIdx[i], edIdx[i]) <= obj.index and
+                    obj.index <= math.max(stIdx[i], edIdx[i])) then
+                    continue = 0
+                end
+            end
+        end
+    end
+    if (continue == 1) then -- 継続しない場合
+        obj.draw()
+    else
+        if (obj.check0 == true) then -- 継続するが、継続しない場合
+            obj.effect("単色化", "強さ", 80, "輝度を保持する", 0, "color", 0x00ff00)
+            obj.draw()
+        end
+    end
+end
