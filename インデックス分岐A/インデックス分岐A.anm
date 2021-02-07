@@ -17,10 +17,10 @@
 ]]
 
 -- インデックス分岐A
---track0:条件1,0,1000,0,1
---track1:条件1,0,1000,2,1
---track2:条件2,0,1000,0,1
---track3:条件2,0,1000,2,1
+--track0:条件1,1,1000,1,1
+--track1:条件1,1,1000,3,1
+--track2:条件2,1,1000,1,1
+--track3:条件2,1,1000,3,1
 --check0:効果適用範囲を可視化,1
 --dialog:開始位置,stIdx={};終了位置,edIdx={};条件1無効化/chk,track_1=0;条件2無効化/chk,track_2=0;
 
@@ -32,21 +32,21 @@ if (#stIdx ~= #edIdx) then
 else
     local continue = 1
     if (track_1 == 0 and 
-        math.min(obj.track0, obj.track1) <= obj.index and 
-        obj.index <= math.max(obj.track0, obj.track1)) then
+        math.min(obj.track0 - 1, obj.track1 - 1) <= obj.index and 
+        obj.index <= math.max(obj.track0 - 1, obj.track1 - 1)) then
         continue = 0
 
     elseif (track_2 == 0 and 
-        math.min(obj.track2, obj.track3) <= obj.index and 
-        obj.index <= math.max(obj.track2, obj.track3)) then
+        math.min(obj.track2 - 1, obj.track3 - 1) <= obj.index and 
+        obj.index <= math.max(obj.track2 - 1, obj.track3 - 1)) then
         continue = 0
     
     end
     if (continue == 1) then
         for i = 1, #stIdx do
             if (continue == 1) then
-                if (math.min(stIdx[i], edIdx[i]) <= obj.index and
-                    obj.index <= math.max(stIdx[i], edIdx[i])) then
+                if (math.min(stIdx[i] - 1, edIdx[i] - 1) <= obj.index and
+                    obj.index <= math.max(stIdx[i] - 1, edIdx[i] - 1)) then
                     continue = 0
                 end
             end
