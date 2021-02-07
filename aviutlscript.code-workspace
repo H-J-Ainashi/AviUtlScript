@@ -1,0 +1,25 @@
+{
+	"folders": [
+		{
+			"path": "."
+		}
+	],
+	"settings": {
+		"files.associations": {
+			"*.anm": "lua",
+			"*.tra": "lua",
+			"*.obj": "lua",
+			"*.scn": "lua",
+			"*.cam": "lua"
+		},
+		"[lua]": {
+			"files.encoding": "shiftjis"
+		},
+		"[c]": {
+			"files.encoding": "shiftjis"
+		},
+		"[cpp]": {
+			"files.encoding": "shiftjis"
+		},
+	}
+}
