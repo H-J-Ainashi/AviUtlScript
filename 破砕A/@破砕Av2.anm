@@ -21,7 +21,7 @@
 --track1:拡散距離,0,300,30,0.01
 --track2:分割数,0,16,4,1
 --track3:余剰部分,-50,50,0.1,0.01
---dialog:X方向偏り（px）,v_x=0;Y方向偏り（px）,v_y=0;X軸拡散倍率,r_x=1.0;Y軸拡散倍率,r_y=1.0;シード,seed=0;ヘルプ,help=
+--dialog:X方向偏り（px）,v_x=0;Y方向偏り（px）,v_y=0;X軸拡散倍率,r_x=1.0;Y軸拡散倍率,r_y=1.0;シード,seed=0;ヘルプ,help="https://github.com/H-J-Ainashi/AviutlScript#%E7%A0%B4%E7%A0%95a%E3%82%B7%E3%83%AA%E3%83%BC%E3%82%BA";
 
 local progress = obj.track0
 local length = obj.track1
@@ -387,7 +387,7 @@ end
 --track1:拡散距離,0,5,1,0.01
 --track2:分割数,0,16,4,1
 --track3:余剰部分,-50,50,0.1,0.01
---dialog:X方向偏り（px）,v_x=0;Y方向偏り（px）,v_y=0;X軸拡散倍率,r_x=1.0;Y軸拡散倍率,r_y=1.0;シード,seed=0;
+--dialog:X方向偏り（px）,v_x=0;Y方向偏り（px）,v_y=0;X軸拡散倍率,r_x=1.0;Y軸拡散倍率,r_y=1.0;シード,seed=0;ヘルプ,help="https://github.com/H-J-Ainashi/AviutlScript#%E7%A0%B4%E7%A0%95a%E3%82%B7%E3%83%AA%E3%83%BC%E3%82%BA";
 
 local time = obj.track0
 local length = obj.track1
@@ -752,7 +752,7 @@ end
 --track1:拡散距離,0,5,1,0.01
 --track2:分割数,0,16,4,1
 --track3:余剰部分,-50,50,0.1,0.01
---dialog:X方向偏り（px）,v_x=0;Y方向偏り（px）,v_y=0;X軸拡散倍率,r_x=1.0;Y軸拡散倍率,r_y=1.0;シード,seed=0;
+--dialog:X方向偏り（px）,v_x=0;Y方向偏り（px）,v_y=0;X軸拡散倍率,r_x=1.0;Y軸拡散倍率,r_y=1.0;シード,seed=0;ヘルプ,help="https://github.com/H-J-Ainashi/AviutlScript#%E7%A0%B4%E7%A0%95a%E3%82%B7%E3%83%AA%E3%83%BC%E3%82%BA";
 
 local frame = obj.track0
 local length = obj.track1
