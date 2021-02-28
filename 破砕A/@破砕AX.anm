@@ -16,77 +16,1097 @@
     along with this program.  If not, see <https://www.gnu.org/licenses/>.
 ]]
 
-@領域内ランダム拡散
+@ランダム
 --track0:進行度,0,100,10,0.01
 --track1:拡散距離,0,300,30,0.01
---track2:拡散角,-180,180,0,0.01
---track3:拡散角,-180,180,0,0.01
---dialog:X方向偏り（px）,v_x=0;Y方向偏り（px）,v_y=0;X軸拡散倍率,r_x=1.0;Y軸拡散倍率,r_y=1.0;シード,seed=0;分割数,separate=4;余剰部分,surplus=1;
+--track2:分割数,0,16,4,1
+--track3:余剰部分,-50,50,0.1,0.01
+--dialog:X方向偏り（px）,v_x=0;Y方向偏り（px）,v_y=0;X軸拡散倍率,r_x=1.0;Y軸拡散倍率,r_y=1.0;シード,seed=0;ヘルプ,help=
 
-local progress  =   obj.track0
-local length    =   obj.track1
-seed            =   math.abs(math.floor(seed))
-separate        =   math.max(1, math.floor(separate))
-r_x             =   math.max(0, r_x)
-r_y             =   math.max(0, r_y)
-local left      =   -obj.w / 2
-local right     =    obj.w / 2
-local top       =   -obj.h / 2
-local bottom    =    obj.h / 2
-local src       = {
-    ox      = obj.ox,
-    oy      = obj.oy,
-    oz      = obj.oz,
-    cx      = obj.cx,
-    cy      = obj.cy,
-    cz      = obj.cz,
-    rx      = obj.rx,
-    ry      = obj.ry,
-    rz      = obj.rz
+local progress = obj.track0
+local length = obj.track1
+local separate = obj.track2
+local surplus = obj.track3
+seed = math.abs(math.floor(seed))
+separate = math.min(math.max(0, math.floor(separate)),16)
+r_x = math.max(0, r_x)
+r_y = math.max(0, r_y)
+local left = -obj.w / 2
+local right = obj.w / 2
+local top = -obj.h / 2
+local bottom = obj.h / 2
+local l = 2 ^ separate
+local src = {
+    ox = obj.ox,
+    oy = obj.oy,
+    oz = obj.oz,
+    cx = obj.cx,
+    cy = obj.cy,
+    cz = obj.cz,
+    rx = obj.rx,
+    ry = obj.ry,
+    rz = obj.rz,
+    alpha = obj.alpha,
+    zoom = obj.zoom
 }
+local clipping_arg = {}
 
--- 分割線に関するパラメータ
-local line      = {}
--- 分割線同士、または端と分割線の交点に関するパラメータ
-local dot       = {}
--- 一時バッファへコピー
-obj.copybuffer("tmp", "obj")
+if (src.alpha ~= 0 and src.zoom ~= 0) then
+    
+    -- 一時バッファへコピー
+    obj.copybuffer("tmp", "obj")
+    
+    -- 値の初期化
+    for i = 1, separate do
 
--- 分割線情報を初期化
-for line_i = 1,separate do
-    -- 乱数生成
-    local cx    = obj.rand(left, right, i, seed * 10 + 1)
-    local cy    = obj.rand(top, bottom, i, seed * 10 + 2)
-    local deg   = math.floor(obj.rand(1, 180, i, seed * 10 + 3))
+        -- 乱数生成
+        local cx = obj.rand(left, right, i, seed * 10 + 1)
+        local cy = obj.rand(top, bottom, i, seed * 10 + 2)
+        local deg = math.floor(obj.rand(1, 180, i, seed * 10 + 3))
+        
+        -- 生成結果を基に関数情報を設定
+        local add_i = #clipping_arg + 1
+        local slope = 0
+        local intercept = 0
+        local non_disp = 0
+        local continue = 1
 
-    -- 生成結果をもとに関数情報を設定
-    local add_i     = #line + 1
-    local slope     = 0
-    local intercept = 0
-    local non_disp  = 0
-    local continue  = 1
+        if (deg ~= 90) then
+            slope = math.tan(math.pi * deg / 180)
+            intercept = cy - (slope * cx)
+        end
 
-    if (deg ~= 90) then
-        slope       = math.tan(math.pi * deg / 180)
-        intercept   = cy - (slope * cx)
+        if (add_i ~= 1) then
+            for j = 1, add_i - 1 do
+                if ((deg ~= 90 and clipping_arg[j].slope == slope and clipping_arg[j].intercept == intercept) or 
+                    (deg == 90 and clipping_arg[j].cx == cx)) then
+                    continue = 0
+                end
+            end
+        end
+
+        if (continue == 1) then
+                
+            -- 境界がオブジェクト内部を通過しない可能性を検証
+            if (slope > 90) then
+                if (slope * (left + cx) + cy < top) then
+                    non_disp = -1
+                elseif (slope * (right + cx) + cy > bottom) then
+                    non_disp = 1
+                end
+            elseif (slope < 90) then
+                if (slope * (right + cx) + cy < top) then
+                    non_disp = 1
+                elseif (slope * (left + cx) + cy > bottom) then
+                    non_disp = -1
+                end
+            else
+                if (cx < left) then
+                    non_disp = -1
+                elseif (cx > right) then
+                    non_disp = 1
+                end
+            end
+
+            -- 値を格納
+            clipping_arg[add_i] = {}
+            clipping_arg[add_i].cx = cx
+            clipping_arg[add_i].cy = cy
+            clipping_arg[add_i].deg = deg
+            clipping_arg[add_i].slope = slope
+            clipping_arg[add_i].intercept = intercept
+            clipping_arg[add_i].non_disp = non_disp
+            clipping_arg[add_i].left = {}
+            clipping_arg[add_i].right = {}
+            clipping_arg[add_i].inner_top = {}
+            clipping_arg[add_i].inner_bottom = {}
+            clipping_arg[add_i].outer_top = {}
+            clipping_arg[add_i].outer_bottom = {}
+        end
     end
 
-    if (add_i ~= 1) then
-        for line_j = 1, add_i - 1 do
-            if ((deg ~= 90 and line[line_j].slope == slope and line[line_j].intercept == intercept) or
-                (deg == 90 and line[line_j].cx == cx)) then
-                continue = 0;
+    separate = #clipping_arg    
+    l = 2 ^ separate
+
+    -- 値の位置関係を検討
+    for i = 1, separate do
+        for j = i, separate do
+            if (i ~= j) then
+                -- 二本の境界が平行かどうかを検証する
+                if (clipping_arg[i].deg == clipping_arg[j].deg) then
+                    -- 平行である場合
+                    -- 切片を用いて検討する
+                    if (clipping_arg[i].deg == 90) then
+                        if (clipping_arg[i].cx < clipping_arg[j].cx) then
+                            table.insert(clipping_arg[i].right, j)
+                        else
+                            table.insert(clipping_arg[i].left, j)
+                        end
+                    elseif (clipping_arg[i].intercept > clipping_arg[j].intercept) then
+                        table.insert(clipping_arg[i].right, j)
+                    else
+                        table.insert(clipping_arg[i].left, j)
+                    end
+                else
+                    -- 平行ではない場合
+                    -- 交点を求めて検討する
+                    local pt = {}
+                    if (clipping_arg[i].deg == 90) then
+                        pt.x = clipping_arg[i].cx
+                        pt.y = clipping_arg[j].slope * pt.x + clipping_arg[j].intercept
+                    elseif (clipping_arg[j].deg == 90) then
+                        pt.x = clipping_arg[j].cx
+                        pt.y = clipping_arg[i].slope * pt.x + clipping_arg[i].intercept
+                    else
+                        pt.x = (clipping_arg[i].intercept - clipping_arg[j].intercept) / (clipping_arg[j].slope - clipping_arg[i].slope)
+                        pt.y = clipping_arg[i].slope * pt.x + clipping_arg[i].intercept
+                    end
+
+                    -- オブジェクト外部に交点がある場合を検討する
+                    if (pt.y < top) then
+                        -- 上側にある場合
+                        if (clipping_arg[i].deg < clipping_arg[j].deg) then
+                            table.insert(clipping_arg[i].left, j)
+                        else
+                            table.insert(clipping_arg[i].right, j)
+                        end
+                    elseif (pt.y > bottom) then
+                        -- 下側にある場合
+                        if (clipping_arg[i].deg < clipping_arg[j].deg) then
+                            table.insert(clipping_arg[i].right, j)
+                        else
+                            table.insert(clipping_arg[i].left, j)
+                        end
+                    elseif (pt.x < left) then
+                        -- 左側にある場合
+                        if (math.max(clipping_arg[i].deg, clipping_arg[j].deg) < 90) then
+                            -- 上側と同じ挙動
+                            if (clipping_arg[i].deg < clipping_arg[j].deg) then
+                                table.insert(clipping_arg[i].left, j)
+                            else
+                                table.insert(clipping_arg[i].right, j)
+                            end
+                        elseif (math.min(clipping_arg[i].deg, clipping_arg[j].deg) > 90) then
+                            -- 下側と同じ挙動
+                            if (clipping_arg[i].deg < clipping_arg[j].deg) then
+                                table.insert(clipping_arg[i].right, j)
+                            else
+                                table.insert(clipping_arg[i].left, j)
+                            end
+                        else
+                            -- 左側固有の挙動
+                            if (clipping_arg[i].deg < clipping_arg[j].deg) then
+                                table.insert(clipping_arg[i].outer_top, j)
+                            else
+                                table.insert(clipping_arg[i].outer_bottom, j)
+                            end
+                        end
+                    elseif (pt.x > right) then
+                        -- 右側にある場合
+                        if (math.min(clipping_arg[i].deg, clipping_arg[j].deg) > 90) then
+                            -- 上側と同じ挙動
+                            if (clipping_arg[i].deg < clipping_arg[j].deg) then
+                                table.insert(clipping_arg[i].left, j)
+                            else
+                                table.insert(clipping_arg[i].right, j)
+                            end
+                        elseif (math.max(clipping_arg[i].deg, clipping_arg[j].deg) < 90) then
+                            -- 下側と同じ挙動
+                            if (clipping_arg[i].deg < clipping_arg[j].deg) then
+                                table.insert(clipping_arg[i].right, j)
+                            else
+                                table.insert(clipping_arg[i].left, j)
+                            end
+                        else
+                            if (clipping_arg[i].deg < clipping_arg[j].deg) then
+                                table.insert(clipping_arg[i].inner_bottom, j)
+                            else
+                                table.insert(clipping_arg[i].inner_top, j)
+                            end
+                        end
+                    end
+                end
             end
         end
     end
 
-    line[add_i]             = {}
-    line[add_i].cx          = cx
-    line[add_i].cy          = cy
-    line[add_i].deg         = deg
-    line[add_i].slope       = slope
-    line[add_i].intercept   = intercept
-    line[add_i].dotpos      = {}
+    -- 描画
+    for i = 0, l - 1 do
+        local continue = 1
+        local reverse = {}
+        local clip = {}
+
+        -- 変数の初期化
+        for j = 1, separate do
+            reverse[j] = (((i % (2 ^ j)) >= (2 ^ (j - 1))) and 1 or 0)
+            clip[j] = 1
+        end
+
+        for j = 1, separate do
+            if (continue == 1 and clip[j]) then
+                if (reverse[j] == 0) then
+                    -- 反転しない場合
+                    for idx, lefter in pairs(clipping_arg[j].left) do
+                        -- 左側に別の境界がある場合
+                        if (reverse[lefter] == 0) then
+                            clip[lefter] = 0
+                        else
+                            continue = 0
+                        end
+                    end
+                    for idx, righter in pairs(clipping_arg[j].right) do
+                        -- 右側に別の境界がある場合
+                        if (reverse[righter] == 0) then
+                            clip[j] = 0
+                        end
+                    end
+                    for idx, inner_top in pairs(clipping_arg[j].inner_top) do
+                        -- 内部方向の上側に別の境界がある場合
+                        if (reverse[inner_top] == 0) then
+                            continue = 0
+                        else
+                            clip[inner_top] = 0
+                        end
+                    end
+                    for idx, inner_bottom in pairs(clipping_arg[j].inner_bottom) do
+                        -- 内部方向の下側に別の境界がある場合
+                        if (reverse[inner_bottom] == 0) then
+                            continue = 0
+                        else
+                            clip[inner_bottom] = 0
+                        end
+                    end
+                    for idx, outer_top in pairs(clipping_arg[j].outer_top) do
+                        -- 外部方向の上側に別の境界がある場合
+                        if (reverse[outer_top] == 1) then
+                            clip[j] = 0
+                        end
+                    end
+                    for idx, outer_bottom in pairs(clipping_arg[j].outer_bottom) do
+                        -- 外部方向の下側に別の境界がある場合
+                        if (reverse[outer_bottom] == 1) then
+                            clip[j] = 0
+                        end
+                    end
+                else
+                    -- 反転する場合
+                    for idx, lefter in pairs(clipping_arg[j].left) do
+                        -- 左側に別の境界が存在する場合
+                        if (reverse[lefter] == 1) then
+                            clip[j] = 0
+                        end
+                    end
+                    for idx, righter in pairs(clipping_arg[j].right) do
+                        -- 右側に別の境界がある場合
+                        if (reverse[righter] == 0) then
+                            continue = 0
+                        else
+                            clip[righter] = 0
+                        end
+                    end
+                    for idx, inner_top in pairs(clipping_arg[j].inner_top) do
+                        -- 内部方向の上側に別の境界がある場合
+                        if (reverse[inner_top] == 0) then
+                            clip[j] = 0
+                        end
+                    end
+                    for idx, inner_bottom in pairs(clipping_arg[j].inner_bottom) do
+                        -- 内部方向の下側に別の境界がある場合
+                        if (reverse[inner_bottom] == 0) then
+                            clip[j] = 0
+                        end
+                    end
+                    for idx, outer_top in pairs(clipping_arg[j].outer_top) do
+                        -- 外部方向の上側に別の境界がある場合
+                        if (reverse[outer_top] == 0) then
+                            clip[outer_top] = 0
+                        else
+                            continue = 0
+                        end
+                    end
+                    for idx, outer_bottom in pairs(clipping_arg[j].outer_bottom) do
+                        -- 外部方向の下側に別の境界がある場合
+                        if (reverse[outer_bottom] == 0) then
+                            clip[outer_bottom] = 0
+                        else
+                            continue = 0
+                        end
+                    end
+                end
+            end
+        end
+
+        if (continue == 1) then
+            obj.load("tempbuffer")
+
+            -- 斜めクリッピング
+            for j = 1, separate do
+                if (clip[j] == 1) then
+                    local cx = clipping_arg[j].cx
+                    local cy = clipping_arg[j].cy
+                    local deg = clipping_arg[j].deg
+                    if (reverse[j] == 1) then
+                        deg = deg + 180
+                    end
+                    cx = cx - math.sin(math.pi * deg / 180) * surplus
+                    cy = cy + math.cos(math.pi * deg / 180) * surplus
+                    obj.effect(
+                        "斜めクリッピング",
+                        "中心X", cx,
+                        "中心Y", cy,
+                        "角度", deg,
+                        "ぼかし", 0)
+                end
+            end
+
+            obj.ox = src.ox
+            obj.oy = src.oy
+            obj.oz = src.oz
+            obj.cx = src.cx
+            obj.cy = src.cy
+            obj.cz = src.cz
+            obj.rx = src.rx
+            obj.ry = src.ry
+            obj.rz = src.rz
+            obj.alpha = src.alpha
+            obj.zoom = src.zoom
+            obj.effect()
+
+            local mov_deg = obj.rand(1, 360, i, seed * 10 + 4)
+            local x = length * math.cos(math.pi * mov_deg / 180) * r_x + v_x
+            local y = length * math.sin(math.pi * mov_deg / 180) * r_y + v_y
+            local rate = progress / 100
+            obj.draw(x * rate, y * rate)
+        end
+    end
 end
 
--- TODO: 交点情報を初期化する
+
+@揺れ文字[秒指定]
+--track0:間隔,0,5,0.1,0.01
+--track1:拡散距離,0,5,1,0.01
+--track2:分割数,0,16,4,1
+--track3:余剰部分,-50,50,0.1,0.01
+--dialog:X方向偏り（px）,v_x=0;Y方向偏り（px）,v_y=0;X軸拡散倍率,r_x=1.0;Y軸拡散倍率,r_y=1.0;シード,seed=0;
+
+local time = obj.track0
+local length = obj.track1
+local separate = obj.track2
+local surplus = obj.track3
+local seed = math.abs(math.floor(obj.time / time))
+separate = math.min(math.max(0, math.floor(separate)),16)
+r_x = math.max(0, r_x)
+r_y = math.max(0, r_y)
+local left = -obj.w / 2
+local right = obj.w / 2
+local top = -obj.h / 2
+local bottom = obj.h / 2
+local l = 2 ^ separate
+local src = {
+    ox = obj.ox,
+    oy = obj.oy,
+    oz = obj.oz,
+    cx = obj.cx,
+    cy = obj.cy,
+    cz = obj.cz,
+    rx = obj.rx,
+    ry = obj.ry,
+    rz = obj.rz,
+    alpha = obj.alpha,
+    zoom = obj.zoom
+}
+local clipping_arg = {}
+
+if (src.alpha ~= 0 and src.zoom ~= 0) then
+    
+    -- 一時バッファへコピー
+    obj.copybuffer("tmp", "obj")
+    
+    -- 値の初期化
+    for i = 1, separate do
+
+        -- 乱数生成
+        local cx = obj.rand(left, right, i, seed * 10 + 1)
+        local cy = obj.rand(top, bottom, i, seed * 10 + 2)
+        local deg = math.floor(obj.rand(1, 180, i, seed * 10 + 3))
+        
+        -- 生成結果を基に関数情報を設定
+        local add_i = #clipping_arg + 1
+        local slope = 0
+        local intercept = 0
+        local non_disp = 0
+        local continue = 1
+
+        if (deg ~= 90) then
+            slope = math.tan(math.pi * deg / 180)
+            intercept = cy - (slope * cx)
+        end
+
+        if (add_i ~= 1) then
+            for j = 1, add_i - 1 do
+                if ((deg ~= 90 and clipping_arg[j].slope == slope and clipping_arg[j].intercept == intercept) or 
+                    (deg == 90 and clipping_arg[j].cx == cx)) then
+                    continue = 0
+                end
+            end
+        end
+
+        if (continue == 1) then
+                
+            -- 境界がオブジェクト内部を通過しない可能性を検証
+            if (slope > 90) then
+                if (slope * (left + cx) + cy < top) then
+                    non_disp = -1
+                elseif (slope * (right + cx) + cy > bottom) then
+                    non_disp = 1
+                end
+            elseif (slope < 90) then
+                if (slope * (right + cx) + cy < top) then
+                    non_disp = 1
+                elseif (slope * (left + cx) + cy > bottom) then
+                    non_disp = -1
+                end
+            else
+                if (cx < left) then
+                    non_disp = -1
+                elseif (cx > right) then
+                    non_disp = 1
+                end
+            end
+
+            -- 値を格納
+            clipping_arg[add_i] = {}
+            clipping_arg[add_i].cx = cx
+            clipping_arg[add_i].cy = cy
+            clipping_arg[add_i].deg = deg
+            clipping_arg[add_i].slope = slope
+            clipping_arg[add_i].intercept = intercept
+            clipping_arg[add_i].non_disp = non_disp
+            clipping_arg[add_i].left = {}
+            clipping_arg[add_i].right = {}
+            clipping_arg[add_i].inner_top = {}
+            clipping_arg[add_i].inner_bottom = {}
+            clipping_arg[add_i].outer_top = {}
+            clipping_arg[add_i].outer_bottom = {}
+        end
+    end
+
+    separate = #clipping_arg    
+    l = 2 ^ separate
+
+    -- 値の位置関係を検討
+    for i = 1, separate do
+        for j = i, separate do
+            if (i ~= j) then
+                -- 二本の境界が平行かどうかを検証する
+                if (clipping_arg[i].deg == clipping_arg[j].deg) then
+                    -- 平行である場合
+                    -- 切片を用いて検討する
+                    if (clipping_arg[i].deg == 90) then
+                        if (clipping_arg[i].cx < clipping_arg[j].cx) then
+                            table.insert(clipping_arg[i].right, j)
+                        else
+                            table.insert(clipping_arg[i].left, j)
+                        end
+                    elseif (clipping_arg[i].intercept > clipping_arg[j].intercept) then
+                        table.insert(clipping_arg[i].right, j)
+                    else
+                        table.insert(clipping_arg[i].left, j)
+                    end
+                else
+                    -- 平行ではない場合
+                    -- 交点を求めて検討する
+                    local pt = {}
+                    if (clipping_arg[i].deg == 90) then
+                        pt.x = clipping_arg[i].cx
+                        pt.y = clipping_arg[j].slope * pt.x + clipping_arg[j].intercept
+                    elseif (clipping_arg[j].deg == 90) then
+                        pt.x = clipping_arg[j].cx
+                        pt.y = clipping_arg[i].slope * pt.x + clipping_arg[i].intercept
+                    else
+                        pt.x = (clipping_arg[i].intercept - clipping_arg[j].intercept) / (clipping_arg[j].slope - clipping_arg[i].slope)
+                        pt.y = clipping_arg[i].slope * pt.x + clipping_arg[i].intercept
+                    end
+
+                    -- オブジェクト外部に交点がある場合を検討する
+                    if (pt.y < top) then
+                        -- 上側にある場合
+                        if (clipping_arg[i].deg < clipping_arg[j].deg) then
+                            table.insert(clipping_arg[i].left, j)
+                        else
+                            table.insert(clipping_arg[i].right, j)
+                        end
+                    elseif (pt.y > bottom) then
+                        -- 下側にある場合
+                        if (clipping_arg[i].deg < clipping_arg[j].deg) then
+                            table.insert(clipping_arg[i].right, j)
+                        else
+                            table.insert(clipping_arg[i].left, j)
+                        end
+                    elseif (pt.x < left) then
+                        -- 左側にある場合
+                        if (math.max(clipping_arg[i].deg, clipping_arg[j].deg) < 90) then
+                            -- 上側と同じ挙動
+                            if (clipping_arg[i].deg < clipping_arg[j].deg) then
+                                table.insert(clipping_arg[i].left, j)
+                            else
+                                table.insert(clipping_arg[i].right, j)
+                            end
+                        elseif (math.min(clipping_arg[i].deg, clipping_arg[j].deg) > 90) then
+                            -- 下側と同じ挙動
+                            if (clipping_arg[i].deg < clipping_arg[j].deg) then
+                                table.insert(clipping_arg[i].right, j)
+                            else
+                                table.insert(clipping_arg[i].left, j)
+                            end
+                        else
+                            -- 左側固有の挙動
+                            if (clipping_arg[i].deg < clipping_arg[j].deg) then
+                                table.insert(clipping_arg[i].outer_top, j)
+                            else
+                                table.insert(clipping_arg[i].outer_bottom, j)
+                            end
+                        end
+                    elseif (pt.x > right) then
+                        -- 右側にある場合
+                        if (math.min(clipping_arg[i].deg, clipping_arg[j].deg) > 90) then
+                            -- 上側と同じ挙動
+                            if (clipping_arg[i].deg < clipping_arg[j].deg) then
+                                table.insert(clipping_arg[i].left, j)
+                            else
+                                table.insert(clipping_arg[i].right, j)
+                            end
+                        elseif (math.max(clipping_arg[i].deg, clipping_arg[j].deg) < 90) then
+                            -- 下側と同じ挙動
+                            if (clipping_arg[i].deg < clipping_arg[j].deg) then
+                                table.insert(clipping_arg[i].right, j)
+                            else
+                                table.insert(clipping_arg[i].left, j)
+                            end
+                        else
+                            if (clipping_arg[i].deg < clipping_arg[j].deg) then
+                                table.insert(clipping_arg[i].inner_bottom, j)
+                            else
+                                table.insert(clipping_arg[i].inner_top, j)
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    -- 描画
+    for i = 0, l - 1 do
+        local continue = 1
+        local reverse = {}
+        local clip = {}
+
+        -- 変数の初期化
+        for j = 1, separate do
+            reverse[j] = (((i % (2 ^ j)) >= (2 ^ (j - 1))) and 1 or 0)
+            clip[j] = 1
+        end
+
+        for j = 1, separate do
+            if (continue == 1 and clip[j]) then
+                if (reverse[j] == 0) then
+                    -- 反転しない場合
+                    for idx, lefter in pairs(clipping_arg[j].left) do
+                        -- 左側に別の境界がある場合
+                        if (reverse[lefter] == 0) then
+                            clip[lefter] = 0
+                        else
+                            continue = 0
+                        end
+                    end
+                    for idx, righter in pairs(clipping_arg[j].right) do
+                        -- 右側に別の境界がある場合
+                        if (reverse[righter] == 0) then
+                            clip[j] = 0
+                        end
+                    end
+                    for idx, inner_top in pairs(clipping_arg[j].inner_top) do
+                        -- 内部方向の上側に別の境界がある場合
+                        if (reverse[inner_top] == 0) then
+                            continue = 0
+                        else
+                            clip[inner_top] = 0
+                        end
+                    end
+                    for idx, inner_bottom in pairs(clipping_arg[j].inner_bottom) do
+                        -- 内部方向の下側に別の境界がある場合
+                        if (reverse[inner_bottom] == 0) then
+                            continue = 0
+                        else
+                            clip[inner_bottom] = 0
+                        end
+                    end
+                    for idx, outer_top in pairs(clipping_arg[j].outer_top) do
+                        -- 外部方向の上側に別の境界がある場合
+                        if (reverse[outer_top] == 1) then
+                            clip[j] = 0
+                        end
+                    end
+                    for idx, outer_bottom in pairs(clipping_arg[j].outer_bottom) do
+                        -- 外部方向の下側に別の境界がある場合
+                        if (reverse[outer_bottom] == 1) then
+                            clip[j] = 0
+                        end
+                    end
+                else
+                    -- 反転する場合
+                    for idx, lefter in pairs(clipping_arg[j].left) do
+                        -- 左側に別の境界が存在する場合
+                        if (reverse[lefter] == 1) then
+                            clip[j] = 0
+                        end
+                    end
+                    for idx, righter in pairs(clipping_arg[j].right) do
+                        -- 右側に別の境界がある場合
+                        if (reverse[righter] == 0) then
+                            continue = 0
+                        else
+                            clip[righter] = 0
+                        end
+                    end
+                    for idx, inner_top in pairs(clipping_arg[j].inner_top) do
+                        -- 内部方向の上側に別の境界がある場合
+                        if (reverse[inner_top] == 0) then
+                            clip[j] = 0
+                        end
+                    end
+                    for idx, inner_bottom in pairs(clipping_arg[j].inner_bottom) do
+                        -- 内部方向の下側に別の境界がある場合
+                        if (reverse[inner_bottom] == 0) then
+                            clip[j] = 0
+                        end
+                    end
+                    for idx, outer_top in pairs(clipping_arg[j].outer_top) do
+                        -- 外部方向の上側に別の境界がある場合
+                        if (reverse[outer_top] == 0) then
+                            clip[outer_top] = 0
+                        else
+                            continue = 0
+                        end
+                    end
+                    for idx, outer_bottom in pairs(clipping_arg[j].outer_bottom) do
+                        -- 外部方向の下側に別の境界がある場合
+                        if (reverse[outer_bottom] == 0) then
+                            clip[outer_bottom] = 0
+                        else
+                            continue = 0
+                        end
+                    end
+                end
+            end
+        end
+
+        if (continue == 1) then
+            obj.load("tempbuffer")
+
+            -- 斜めクリッピング
+            for j = 1, separate do
+                if (clip[j] == 1) then
+                    local cx = clipping_arg[j].cx
+                    local cy = clipping_arg[j].cy
+                    local deg = clipping_arg[j].deg
+                    if (reverse[j] == 1) then
+                        deg = deg + 180
+                    end
+                    cx = cx - math.sin(math.pi * deg / 180) * surplus
+                    cy = cy + math.cos(math.pi * deg / 180) * surplus
+                    obj.effect(
+                        "斜めクリッピング",
+                        "中心X", cx,
+                        "中心Y", cy,
+                        "角度", deg,
+                        "ぼかし", 0)
+                end
+            end
+
+            obj.ox = src.ox
+            obj.oy = src.oy
+            obj.oz = src.oz
+            obj.cx = src.cx
+            obj.cy = src.cy
+            obj.cz = src.cz
+            obj.rx = src.rx
+            obj.ry = src.ry
+            obj.rz = src.rz
+            obj.alpha = src.alpha
+            obj.zoom = src.zoom
+            obj.effect()
+
+            local mov_deg = obj.rand(1, 360, i, seed * 10 + 4)
+            local x = length * math.cos(math.pi * mov_deg / 180) * r_x + v_x
+            local y = length * math.sin(math.pi * mov_deg / 180) * r_y + v_y
+            obj.draw(x, y)
+        end
+    end
+end
+
+
+@揺れ文字[フレーム指定]
+--track0:間隔,0,300,0.1,0.01
+--track1:拡散距離,0,5,1,0.01
+--track2:分割数,0,16,4,1
+--track3:余剰部分,-50,50,0.1,0.01
+--dialog:X方向偏り（px）,v_x=0;Y方向偏り（px）,v_y=0;X軸拡散倍率,r_x=1.0;Y軸拡散倍率,r_y=1.0;シード,seed=0;
+
+local frame = obj.track0
+local length = obj.track1
+local separate = obj.track2
+local surplus = obj.track3
+local seed = math.abs(math.floor(obj.frame / frame))
+separate = math.min(math.max(0, math.floor(separate)),16)
+r_x = math.max(0, r_x)
+r_y = math.max(0, r_y)
+local left = -obj.w / 2
+local right = obj.w / 2
+local top = -obj.h / 2
+local bottom = obj.h / 2
+local l = 2 ^ separate
+local src = {
+    ox = obj.ox,
+    oy = obj.oy,
+    oz = obj.oz,
+    cx = obj.cx,
+    cy = obj.cy,
+    cz = obj.cz,
+    rx = obj.rx,
+    ry = obj.ry,
+    rz = obj.rz,
+    alpha = obj.alpha,
+    zoom = obj.zoom
+}
+local clipping_arg = {}
+
+if (src.alpha ~= 0 and src.zoom ~= 0) then
+    
+    -- 一時バッファへコピー
+    obj.copybuffer("tmp", "obj")
+    
+    -- 値の初期化
+    for i = 1, separate do
+
+        -- 乱数生成
+        local cx = obj.rand(left, right, i, seed * 10 + 1)
+        local cy = obj.rand(top, bottom, i, seed * 10 + 2)
+        local deg = math.floor(obj.rand(1, 180, i, seed * 10 + 3))
+        
+        -- 生成結果を基に関数情報を設定
+        local add_i = #clipping_arg + 1
+        local slope = 0
+        local intercept = 0
+        local non_disp = 0
+        local continue = 1
+
+        if (deg ~= 90) then
+            slope = math.tan(math.pi * deg / 180)
+            intercept = cy - (slope * cx)
+        end
+
+        if (add_i ~= 1) then
+            for j = 1, add_i - 1 do
+                if ((deg ~= 90 and clipping_arg[j].slope == slope and clipping_arg[j].intercept == intercept) or 
+                    (deg == 90 and clipping_arg[j].cx == cx)) then
+                    continue = 0
+                end
+            end
+        end
+
+        if (continue == 1) then
+                
+            -- 境界がオブジェクト内部を通過しない可能性を検証
+            if (slope > 90) then
+                if (slope * (left + cx) + cy < top) then
+                    non_disp = -1
+                elseif (slope * (right + cx) + cy > bottom) then
+                    non_disp = 1
+                end
+            elseif (slope < 90) then
+                if (slope * (right + cx) + cy < top) then
+                    non_disp = 1
+                elseif (slope * (left + cx) + cy > bottom) then
+                    non_disp = -1
+                end
+            else
+                if (cx < left) then
+                    non_disp = -1
+                elseif (cx > right) then
+                    non_disp = 1
+                end
+            end
+
+            -- 値を格納
+            clipping_arg[add_i] = {}
+            clipping_arg[add_i].cx = cx
+            clipping_arg[add_i].cy = cy
+            clipping_arg[add_i].deg = deg
+            clipping_arg[add_i].slope = slope
+            clipping_arg[add_i].intercept = intercept
+            clipping_arg[add_i].non_disp = non_disp
+            clipping_arg[add_i].left = {}
+            clipping_arg[add_i].right = {}
+            clipping_arg[add_i].inner_top = {}
+            clipping_arg[add_i].inner_bottom = {}
+            clipping_arg[add_i].outer_top = {}
+            clipping_arg[add_i].outer_bottom = {}
+        end
+    end
+
+    separate = #clipping_arg    
+    l = 2 ^ separate
+
+    -- 値の位置関係を検討
+    for i = 1, separate do
+        for j = i, separate do
+            if (i ~= j) then
+                -- 二本の境界が平行かどうかを検証する
+                if (clipping_arg[i].deg == clipping_arg[j].deg) then
+                    -- 平行である場合
+                    -- 切片を用いて検討する
+                    if (clipping_arg[i].deg == 90) then
+                        if (clipping_arg[i].cx < clipping_arg[j].cx) then
+                            table.insert(clipping_arg[i].right, j)
+                        else
+                            table.insert(clipping_arg[i].left, j)
+                        end
+                    elseif (clipping_arg[i].intercept > clipping_arg[j].intercept) then
+                        table.insert(clipping_arg[i].right, j)
+                    else
+                        table.insert(clipping_arg[i].left, j)
+                    end
+                else
+                    -- 平行ではない場合
+                    -- 交点を求めて検討する
+                    local pt = {}
+                    if (clipping_arg[i].deg == 90) then
+                        pt.x = clipping_arg[i].cx
+                        pt.y = clipping_arg[j].slope * pt.x + clipping_arg[j].intercept
+                    elseif (clipping_arg[j].deg == 90) then
+                        pt.x = clipping_arg[j].cx
+                        pt.y = clipping_arg[i].slope * pt.x + clipping_arg[i].intercept
+                    else
+                        pt.x = (clipping_arg[i].intercept - clipping_arg[j].intercept) / (clipping_arg[j].slope - clipping_arg[i].slope)
+                        pt.y = clipping_arg[i].slope * pt.x + clipping_arg[i].intercept
+                    end
+
+                    -- オブジェクト外部に交点がある場合を検討する
+                    if (pt.y < top) then
+                        -- 上側にある場合
+                        if (clipping_arg[i].deg < clipping_arg[j].deg) then
+                            table.insert(clipping_arg[i].left, j)
+                        else
+                            table.insert(clipping_arg[i].right, j)
+                        end
+                    elseif (pt.y > bottom) then
+                        -- 下側にある場合
+                        if (clipping_arg[i].deg < clipping_arg[j].deg) then
+                            table.insert(clipping_arg[i].right, j)
+                        else
+                            table.insert(clipping_arg[i].left, j)
+                        end
+                    elseif (pt.x < left) then
+                        -- 左側にある場合
+                        if (math.max(clipping_arg[i].deg, clipping_arg[j].deg) < 90) then
+                            -- 上側と同じ挙動
+                            if (clipping_arg[i].deg < clipping_arg[j].deg) then
+                                table.insert(clipping_arg[i].left, j)
+                            else
+                                table.insert(clipping_arg[i].right, j)
+                            end
+                        elseif (math.min(clipping_arg[i].deg, clipping_arg[j].deg) > 90) then
+                            -- 下側と同じ挙動
+                            if (clipping_arg[i].deg < clipping_arg[j].deg) then
+                                table.insert(clipping_arg[i].right, j)
+                            else
+                                table.insert(clipping_arg[i].left, j)
+                            end
+                        else
+                            -- 左側固有の挙動
+                            if (clipping_arg[i].deg < clipping_arg[j].deg) then
+                                table.insert(clipping_arg[i].outer_top, j)
+                            else
+                                table.insert(clipping_arg[i].outer_bottom, j)
+                            end
+                        end
+                    elseif (pt.x > right) then
+                        -- 右側にある場合
+                        if (math.min(clipping_arg[i].deg, clipping_arg[j].deg) > 90) then
+                            -- 上側と同じ挙動
+                            if (clipping_arg[i].deg < clipping_arg[j].deg) then
+                                table.insert(clipping_arg[i].left, j)
+                            else
+                                table.insert(clipping_arg[i].right, j)
+                            end
+                        elseif (math.max(clipping_arg[i].deg, clipping_arg[j].deg) < 90) then
+                            -- 下側と同じ挙動
+                            if (clipping_arg[i].deg < clipping_arg[j].deg) then
+                                table.insert(clipping_arg[i].right, j)
+                            else
+                                table.insert(clipping_arg[i].left, j)
+                            end
+                        else
+                            if (clipping_arg[i].deg < clipping_arg[j].deg) then
+                                table.insert(clipping_arg[i].inner_bottom, j)
+                            else
+                                table.insert(clipping_arg[i].inner_top, j)
+                            end
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    -- 描画
+    for i = 0, l - 1 do
+        local continue = 1
+        local reverse = {}
+        local clip = {}
+
+        -- 変数の初期化
+        for j = 1, separate do
+            reverse[j] = (((i % (2 ^ j)) >= (2 ^ (j - 1))) and 1 or 0)
+            clip[j] = 1
+        end
+
+        for j = 1, separate do
+            if (continue == 1 and clip[j]) then
+                if (reverse[j] == 0) then
+                    -- 反転しない場合
+                    for idx, lefter in pairs(clipping_arg[j].left) do
+                        -- 左側に別の境界がある場合
+                        if (reverse[lefter] == 0) then
+                            clip[lefter] = 0
+                        else
+                            continue = 0
+                        end
+                    end
+                    for idx, righter in pairs(clipping_arg[j].right) do
+                        -- 右側に別の境界がある場合
+                        if (reverse[righter] == 0) then
+                            clip[j] = 0
+                        end
+                    end
+                    for idx, inner_top in pairs(clipping_arg[j].inner_top) do
+                        -- 内部方向の上側に別の境界がある場合
+                        if (reverse[inner_top] == 0) then
+                            continue = 0
+                        else
+                            clip[inner_top] = 0
+                        end
+                    end
+                    for idx, inner_bottom in pairs(clipping_arg[j].inner_bottom) do
+                        -- 内部方向の下側に別の境界がある場合
+                        if (reverse[inner_bottom] == 0) then
+                            continue = 0
+                        else
+                            clip[inner_bottom] = 0
+                        end
+                    end
+                    for idx, outer_top in pairs(clipping_arg[j].outer_top) do
+                        -- 外部方向の上側に別の境界がある場合
+                        if (reverse[outer_top] == 1) then
+                            clip[j] = 0
+                        end
+                    end
+                    for idx, outer_bottom in pairs(clipping_arg[j].outer_bottom) do
+                        -- 外部方向の下側に別の境界がある場合
+                        if (reverse[outer_bottom] == 1) then
+                            clip[j] = 0
+                        end
+                    end
+                else
+                    -- 反転する場合
+                    for idx, lefter in pairs(clipping_arg[j].left) do
+                        -- 左側に別の境界が存在する場合
+                        if (reverse[lefter] == 1) then
+                            clip[j] = 0
+                        end
+                    end
+                    for idx, righter in pairs(clipping_arg[j].right) do
+                        -- 右側に別の境界がある場合
+                        if (reverse[righter] == 0) then
+                            continue = 0
+                        else
+                            clip[righter] = 0
+                        end
+                    end
+                    for idx, inner_top in pairs(clipping_arg[j].inner_top) do
+                        -- 内部方向の上側に別の境界がある場合
+                        if (reverse[inner_top] == 0) then
+                            clip[j] = 0
+                        end
+                    end
+                    for idx, inner_bottom in pairs(clipping_arg[j].inner_bottom) do
+                        -- 内部方向の下側に別の境界がある場合
+                        if (reverse[inner_bottom] == 0) then
+                            clip[j] = 0
+                        end
+                    end
+                    for idx, outer_top in pairs(clipping_arg[j].outer_top) do
+                        -- 外部方向の上側に別の境界がある場合
+                        if (reverse[outer_top] == 0) then
+                            clip[outer_top] = 0
+                        else
+                            continue = 0
+                        end
+                    end
+                    for idx, outer_bottom in pairs(clipping_arg[j].outer_bottom) do
+                        -- 外部方向の下側に別の境界がある場合
+                        if (reverse[outer_bottom] == 0) then
+                            clip[outer_bottom] = 0
+                        else
+                            continue = 0
+                        end
+                    end
+                end
+            end
+        end
+
+        if (continue == 1) then
+            obj.load("tempbuffer")
+
+            -- 斜めクリッピング
+            for j = 1, separate do
+                if (clip[j] == 1) then
+                    local cx = clipping_arg[j].cx
+                    local cy = clipping_arg[j].cy
+                    local deg = clipping_arg[j].deg
+                    if (reverse[j] == 1) then
+                        deg = deg + 180
+                    end
+                    cx = cx - math.sin(math.pi * deg / 180) * surplus
+                    cy = cy + math.cos(math.pi * deg / 180) * surplus
+                    obj.effect(
+                        "斜めクリッピング",
+                        "中心X", cx,
+                        "中心Y", cy,
+                        "角度", deg,
+                        "ぼかし", 0)
+                end
+            end
+
+            obj.ox = src.ox
+            obj.oy = src.oy
+            obj.oz = src.oz
+            obj.cx = src.cx
+            obj.cy = src.cy
+            obj.cz = src.cz
+            obj.rx = src.rx
+            obj.ry = src.ry
+            obj.rz = src.rz
+            obj.alpha = src.alpha
+            obj.zoom = src.zoom
+            obj.effect()
+
+            local mov_deg = obj.rand(1, 360, i, seed * 10 + 4)
+            local x = length * math.cos(math.pi * mov_deg / 180) * r_x + v_x
+            local y = length * math.sin(math.pi * mov_deg / 180) * r_y + v_y
+            obj.draw(x, y)
+        end
+    end
+end
