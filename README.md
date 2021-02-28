@@ -23,7 +23,7 @@
 
 ### ダウンロード
 * [Version 1](https://github.com/H-J-Ainashi/AviutlScript/blob/main/%E7%A0%B4%E7%A0%95A/@%E7%A0%B4%E7%A0%95Av1.zip?raw=true)（以降のバージョンと互換性なし）
-* [Version 2](https://github.com/H-J-Ainashi/AviutlScript/blob/main/%E7%A0%B4%E7%A0%95A/@%E7%A0%B4%E7%A0%95Av2.zip?raw=true)（開発中）
+* [Version 2](https://github.com/H-J-Ainashi/AviutlScript/blob/main/%E7%A0%B4%E7%A0%95A/@%E7%A0%B4%E7%A0%95Av2.zip?raw=true)（最新版）
 
 ### 各パラメータの説明
 #### 共通
